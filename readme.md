@@ -1,4 +1,4 @@
-# Speed up REAL hello WORLD application (Laravel 5)
+## Speed up REAL hello WORLD application (Laravel 5)
 
 ## Preface
 
@@ -147,7 +147,7 @@ ab will tell you there are failed requests. It happens because Laravel welcome s
 Save initial profile
 
 ```
-blackfire --slot 1 --samples 10 curl http://localhost/
+neomerx@L5:~$ blackfire --slot 1 --samples 10 curl http://localhost/
 ```
 
 to see the result [at slot 1](https://blackfire.io/slots) Or you can see [mine here](https://blackfire.io/profiles/be7d0588-9454-4a5c-aff8-d36774b8376d/graph)
@@ -164,7 +164,7 @@ Laravel comes with a few built-in optimizations. Run the following command
 neomerx@L5:~$ cd ~/laravel/ && php artisan config:cache && php artisan route:cache && php artisan optimize --force
 ```
 
-Check that the following file were created
+Check that the following files were created
 
 * storage/framework/config.php
 * vendor/compiled.php
@@ -178,12 +178,12 @@ neomerx@L5:~$ ab -c 10 -t 3 http://localhost/
 
 After 3 runs I got numbers (RPS): 215.18, 207.91, 210.88
 
-Well we have some improvement but more interesting at application profile further.
+Well we have some improvement but more interesting numbers are at application profile.
 
 #### Blackfire test
 
 ```
-blackfire --slot 2 --samples 10 curl http://localhost/
+neomerx@L5:~$ blackfire --slot 2 --samples 10 curl http://localhost/
 ```
 
 You can see [mine here](https://blackfire.io/profiles/fea1b426-246b-4647-882d-f1c0dc40576e/graph)
@@ -191,15 +191,15 @@ You can see [mine here](https://blackfire.io/profiles/fea1b426-246b-4647-882d-f1
 |Slot                           |Wall Time|IO     |CPU Time|Memory |Network|
 |-------------------------------|---------|-------|--------|-------|-------|
 |#1. Initial                    |87.6 ms  |260 µs |87.3 ms |3.19 MB|0 B    |
-|-------------------------------|---------|-------|--------|-------|-------|
 |#2. More built-in optimizations|60.9 ms  |121 µs |60.8 ms |3.04 MB|0 B    |
-|-------------------------------|---------|-------|--------|-------|-------|
 |Comparison from #1 to #2       |-27 ms   |-140 µs|-27 ms  |-146 KB|0 B    |
 
 Detailed comparison is [here](https://blackfire.io/profiles/compare/4b84af7b-78ad-490f-a7bb-57f9e4179134/graph)
 
 As you can see Wall Time dropped 31% and CPU Time 30% however we haven't seen such gains in ab test. What it might mean? Overall performance of the application depends not only from application itself but from OS configuration, web server configuration and etc.
 
-Application performance testing gives more accurate view of how application is optimized without unnecessary influence of other parts of the system. For this reason I will use application testing further but not ab tool.
+Application performance testing gives more accurate view of how application is optimized without unnecessary influence of other parts of the system. For this reason I will use application testing alone without ab tool.
+
+
 
 
