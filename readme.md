@@ -118,7 +118,7 @@ neomerx@L5:~$ sudo reboot
 
 ## Speed up application
 
-Open in browser http://<server IP address>/ and check that Laravel works correctly.
+Open in browser http://```<server IP address>```/ and check that Laravel works correctly.
 
 ### First run
 
@@ -215,6 +215,8 @@ Before we go further we should remember that we are developing 'Hello World' app
 * We don't need authentication so remove 'auth' and 'password' routes and auth middleware in controller constructors (```app/Http/Controllers/WelcomeController.php``` and ```app/Http/Controllers/HomeController.php```)
 * We will reduce number of loaded providers which we don't use by removing them from ```config/app.php```.
 
+All code changes could be found in [this commit](https://github.com/neomerx/rhw-l5/commit/efa2b6be6b194937cb76368233ef85d348a8f7ef)
+
 #### Blackfire test
 
 ```
@@ -282,7 +284,7 @@ Restart NGINX
 neomerx@L5:~$ sudo service nginx restart
 ```
 
-Open in browser http://<server IP address>**:8080**/ and check that Laravel works correctly.
+Open in browser http://```<server IP address>```**:8080**/ and check that Laravel works correctly.
 
 #### ab test
 
