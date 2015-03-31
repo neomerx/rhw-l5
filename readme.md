@@ -118,7 +118,7 @@ neomerx@L5:~$ sudo reboot
 
 ## Speed up application
 
-Open in your browser http://<server IP address/ and check that Laravel works correctly.
+Open in browser http://<server IP address>/ and check that Laravel works correctly.
 
 ### First run
 
@@ -198,8 +198,104 @@ Detailed comparison is [here](https://blackfire.io/profiles/compare/4b84af7b-78a
 
 As you can see Wall Time dropped 31% and CPU Time 30% however we haven't seen such gains in ab test. What it might mean? Overall performance of the application depends not only from application itself but from OS configuration, web server configuration and etc.
 
-Application performance testing gives more accurate view of how application is optimized without unnecessary influence of other parts of the system. For this reason I will use application testing alone without ab tool.
+Application performance testing gives more accurate view of how application is optimized without unnecessary influence of other parts of the system. For this reason I would rely mostly on application testing alone without ab tool.
 
+### Real Hello World
 
+If you look closer at profile report you might conclude that main slowest parts of the application are
 
+* registering and boot various providers
+* Usage of IoC container
+* pipelining through middleware and routs (with a rather scary long stack trace)
 
+Before we go further we should remember that we are developing 'Hello World' application and Laravel comes with a ton of features right out of the box. Do we need them all? How do they impact performance of our application? Let's try to answer
+
+* Do we need cookies, session and CSRF protection? Probably not. So remove not needed middleware at app/Http/Kernel.php@$middleware
+* While handling the request session is activated and by default is configured in 'file' mode which leads to tons of files in ```storage/framework/sessions/``` folder and IO load. Session cannot be switched off but we can lower impact by setting drivers to 'array' mode in ```.env``` file
+* We don't need authentication so remove 'auth' and 'password' routes and auth middleware in controller constructors (```app/Http/Controllers/WelcomeController.php``` and ```app/Http/Controllers/HomeController.php```)
+* We will reduce number of loaded providers which we don't use by removing them from ```config/app.php```.
+
+#### Blackfire test
+
+```
+neomerx@L5:~$ blackfire --slot 3 --samples 10 curl http://localhost/
+```
+
+You can see [mine here](https://blackfire.io/profiles/91b5c46f-91f2-4577-9eaf-0111ce2fc76b/graph)
+
+|Slot                           |Wall Time|IO     |CPU Time|Memory |Network|
+|-------------------------------|---------|-------|--------|-------|-------|
+|#1. Initial                    |87.6 ms  |260 µs |87.3 ms |3.19 MB|0 B    |
+|#2. More built-in optimizations|60.9 ms  |121 µs |60.8 ms |3.04 MB|0 B    |
+|#3. Real Hello World           |41.6 ms  |56  µs |41.5 ms |2.80 MB|0 B    |
+|Comparison from #2 to #3       |-19 ms   |-65 µs |-19 ms  |-252 KB|0 B    |
+
+Detailed comparison is [here](https://blackfire.io/profiles/compare/a23127ed-20a0-4fff-b307-4e63eff32c61/graph)
+
+#### Summary
+
+Having implemented a few simple steps we improved performance of our 'Hello World' for more than 2 times. Our application supports vital Laravel features such as routing, controllers, views, templates, localization and etc.
+
+Note: I also checked how it impacted RPS and got: 330.92, 289.66, 305.99 which is 50% improvement from stock Laravel 5.
+
+### Do you want even more RPS?
+
+I'm sure you do otherwise you wouldn't be here. Let's install [HHVM](http://hhvm.com/) and see how it works
+
+```
+neomerx@L5:~$ sudo apt-get install software-properties-common && sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0x5a16e7281be7a449 && sudo add-apt-repository 'deb http://dl.hhvm.com/ubuntu trusty main' && sudo apt-get update && sudo apt-get install hhvm && sudo service nginx restart
+```
+
+Configure NGINX for using HHVM
+
+```
+neomerx@L5:~$ sudo nano /etc/nginx/sites-enabled/default
+```
+
+And append the following
+
+>server {  
+>		listen 8080 default_server;  
+>		listen [::]:8080 default_server ipv6only=on;  
+>		server_name localhost;  
+>  
+>		root /home/neomerx/laravel/public/;  
+>		index index.php;  
+>  
+>		location / {  
+>				try_files $uri $uri/ /index.php?$query_string;  
+>		}  
+>  
+>		location ~* \.php$ {  
+>		fastcgi_keep_conn	on;  
+>		fastcgi_pass		127.0.0.1:9000;  
+>		fastcgi_param		SCRIPT_FILENAME $document_root$fastcgi_script_name;  
+>		include			fastcgi_params;  
+>		}  
+>}  
+
+Save and exit (Ctrl+O, Ctrl+X)
+
+Restart NGINX
+
+```
+neomerx@L5:~$ sudo service nginx restart
+```
+
+Open in browser http://<server IP address>**:8080**/ and check that Laravel works correctly.
+
+#### ab test
+
+```
+neomerx@L5:~$ ab -c 10 -t 3 http://localhost:8080/
+```
+
+After a few runs I got numbers (RPS): 374.73, 682.83, 584.68, **771.33, 729.74, 734.95**
+
+**From 200 RPS to 750 RPS. Not bad huh?**
+
+### Summary
+
+That's the end of 'Speed up application' part. We have played with stock Laravel 5 application, performance tools/options and found simple and effective ways to make our application faster.
+
+In the next part we go deeper to hack Laravel 5 framework using [Blackfire](https://blackfire.io/).
