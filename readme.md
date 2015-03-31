@@ -469,3 +469,48 @@ The key differences are
 Run optimization command and see what's changed
 
 The test result shows total time of ```gatherRouteMiddlewares``` reduced to almost zero. I can't even find it in the profiling report which means we have **improved for 0.55 ms** of CPU time, **1.4%** from previous test. Overall timing decreased for 1,9 ms which supports our assumption. 
+
+### Illuminate\Pipeline\Pipeline::then
+
+That's another function that is closely related to routing. In fact it's called on every request and called recursively more than once. It's not terribly slow however I'd like to look at it more closely.
+
+That's how it looks in profiler
+
+![Illuminate\Pipeline\Pipeline::then](/images/Pipeline_Pipeline_then.png)
+
+As you can see by '@' it's called recursively and combined statistics isn't available. That's the implementation
+
+```php
+	public function then(Closure $destination)
+	{
+		$firstSlice = $this->getInitialSlice($destination);
+
+		$pipes = array_reverse($this->pipes);
+
+		return call_user_func(
+			array_reduce($pipes, $this->getSlice(), $firstSlice), $this->passable
+		);
+	}
+```
+
+From logical standpoint what this code creates sophisticated link chain between request and response (typically from controller) _trough_ all middleware layers. Look at any middleware@handler method signature and you will see that it requires link (Closure) to the next middleware (or controller if it's the last middleware in the stack).
+
+Note: Pipeline is used for both middleware stack and routing stack. So in fact typical link chain is request - middleware pipeline - routing pipeline - controller.
+
+As this algorithm has to start from the last chain (middleware/route) current implementation creates new array with ```array_reverse``` and then dynamically changes its size with ```array_reduce```. We can avoid memory extensive memory usages.
+
+```php
+	public function then(Closure $destination)
+	{
+		$linkNext = $this->getSlice();
+		$next     = $this->getInitialSlice($destination);
+		for ($i = count($this->pipes) - 1; $i >= 0; $i--) {
+			$next = $linkNext($next, $this->pipes[$i]);
+		}
+
+		return $next($this->passable);
+	}
+```
+
+Run optimization command and see that CPU Time for ```Illuminate\Pipeline\Pipeline::then @2``` **reduced from 1.84 ms to 1.29 ms**.
+
