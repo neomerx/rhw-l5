@@ -307,3 +307,119 @@ After a few runs I got numbers (RPS): 374.73, 682.83, 584.68, **771.33, 729.74, 
 That's the end of 'Speed up application' part. We have played with stock Laravel 5 application, performance tools/options and found simple and effective ways to make our application faster.
 
 In the next part we go deeper to hack Laravel 5 framework using [Blackfire](https://blackfire.io/).
+
+## Researching Laravel 5 Framework
+
+Before we start take a look at Blackfire [Tutorial](https://blackfire.io/doc/first-profile) and [FAQ](https://blackfire.io/doc/faq) sections. They will greatly help you with understanding profile reports.
+
+When choosing what method start with a good approach could be selecting from ones that consume most. Blackfire by default sorts methods by it's own resource usage (Time, IO wait time, CPU and Memory usage).
+
+However it shouldn't be the only criteria because the problem could be in algorithm chosen and the root function of the problem might consume little resources.
+
+Ok, let's start from something simple
+
+### Illuminate\Container\Container::fireResolvingCallbacks
+
+That's how it looks in profiler
+
+![Illuminate\Container\Container::fireResolvingCallbacks](/images/Container_Container_fireResolvingCallbacks.png)
+
+That's the implementation
+
+```php
+	protected function fireResolvingCallbacks($abstract, $object)
+	{
+		$this->fireCallbackArray($object, $this->globalResolvingCallbacks);
+
+		$this->fireCallbackArray(
+			$object, $this->getCallbacksForType(
+				$abstract, $object, $this->resolvingCallbacks
+			)
+		);
+
+		$this->fireCallbackArray($object, $this->globalAfterResolvingCallbacks);
+
+		$this->fireCallbackArray(
+			$object, $this->getCallbacksForType(
+				$abstract, $object, $this->afterResolvingCallbacks
+			)
+		);
+	}
+```
+
+As you can see the function is called 29 times so even small performance gain will be multiplied by 29
+
+You also need to look at methods called by fireResolvingCallbacks
+
+```php
+	protected function getCallbacksForType($abstract, $object, array $callbacksPerType)
+	{
+		$results = [];
+
+		foreach ($callbacksPerType as $type => $callbacks)
+		{
+			if ($type === $abstract || $object instanceof $type)
+			{
+				$results = array_merge($results, $callbacks);
+			}
+		}
+
+		return $results;
+	}
+
+	protected function fireCallbackArray($object, array $callbacks)
+	{
+		foreach ($callbacks as $callback)
+		{
+			$callback($object, $this);
+		}
+	}
+```
+
+What ```getCallbacksForType``` does is selecting callbacks from $this->xxxResolvingCallbacks and then invoking them in ```fireResolvingCallbacks```
+
+Thus we can refactor it and
+
+* avoid memory allocation for array in getCallbacksForType
+* use knowledge that arrays $this->xxxResolvingCallbacks are typically empty and reduce number of external calls
+
+That's the proposed implementation
+
+```php
+	protected function fireResolvingCallbacks($abstract, $object)
+	{
+		if ( ! empty($this->globalResolvingCallbacks)) {
+			$this->fireCallbackArray($object, $this->globalResolvingCallbacks);
+		}
+
+		foreach ($this->resolvingCallbacks as $type => $callbacks)
+		{
+			if ($type === $abstract || $object instanceof $type)
+			{
+				$this->fireCallbackArray($object, $callbacks);
+			}
+		}
+
+		if ( ! empty($this->globalAfterResolvingCallbacks)) {
+			$this->fireCallbackArray($object, $this->globalAfterResolvingCallbacks);
+		}
+
+		foreach ($this->afterResolvingCallbacks as $type => $callbacks)
+		{
+			if ($type === $abstract || $object instanceof $type)
+			{
+				$this->fireCallbackArray($object, $callbacks);
+			}
+		}
+	}
+```
+
+As a result we can remove ```getCallbacksForType```
+
+From here I will be using the following command to run Laravel optimizer, warm-up the server and run profiler. All further profiles will be written to slot 4 which means actual result in the latest profile might differ from what I include to the description. However the difference shouldn't be dramatic. The link to report will be at the end as Blackfire generates unique URL after every run.
+
+```
+neomerx@L5:~$ cd ~/laravel/ && php artisan config:cache && php artisan route:cache && php artisan optimize --force && ab -c 1 -n 200 -t 3 http://localhost/ && blackfire --slot 4 --samples 10 curl http://localhost/
+```
+
+The test result shows total time of ```fireResolvingCallbacks``` reduced to almost zero. I can't even find it in the profiling report which means we have **improved for 1.8 ms (4.3%)** with this change. Overall timing decreased for 2.72 ms which supports our assumption about 1.8 ms gain. 
