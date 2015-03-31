@@ -423,3 +423,49 @@ neomerx@L5:~$ cd ~/laravel/ && php artisan config:cache && php artisan route:cac
 ```
 
 The test result shows total time of ```fireResolvingCallbacks``` reduced to almost zero. I can't even find it in the profiling report which means we have **improved for 1.8 ms (4.3%)** with this change. Overall timing decreased for 2.72 ms which supports our assumption about 1.8 ms gain. 
+
+
+### Illuminate\Routing\Router::gatherRouteMiddlewares
+
+That's how it looks in profiler
+
+![Illuminate\Routing\Router::gatherRouteMiddlewares](/images/Routing_Router_gatherRouteMiddlewares.png)
+
+That's the implementation
+
+```php
+	public function gatherRouteMiddlewares(Route $route)
+	{
+		return Collection::make($route->middleware())->map(function($m)
+		{
+			return Collection::make(array_get($this->middleware, $m, $m));
+
+		})->collapse()->all();
+	}
+```
+
+What it basically does matching middleware names from route with class names that implement it.
+
+```php
+	public function gatherRouteMiddlewares(Route $route)
+	{
+		$result = [];
+
+		foreach ($route->middleware() as $tag)
+		{
+			$result[] = (isset($this->middleware[$tag]) === true ? $this->middleware[$tag] : $tag);
+		}
+
+		return $result;
+	}
+```
+
+The key differences are
+
+* number of external call significantly reduced to single call
+* number of temporary arrays and objects significantly reduced to 1
+* faster iteration with ```foreach``` is used instead of slower callback functions such as ```array_map```
+
+Run optimization command and see what's changed
+
+The test result shows total time of ```gatherRouteMiddlewares``` reduced to almost zero. I can't even find it in the profiling report which means we have **improved for 0.55 ms** of CPU time, **1.4%** from previous test. Overall timing decreased for 1,9 ms which supports our assumption. 
