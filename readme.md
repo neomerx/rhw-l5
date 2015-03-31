@@ -217,6 +217,12 @@ Before we go further we should remember that we are developing 'Hello World' app
 
 All code changes could be found in [this commit](https://github.com/neomerx/rhw-l5/commit/efa2b6be6b194937cb76368233ef85d348a8f7ef)
 
+Before running tests apply optimizations
+
+```
+neomerx@L5:~$ cd ~/laravel/ && php artisan config:cache && php artisan route:cache && php artisan optimize --force
+```
+
 #### Blackfire test
 
 ```
