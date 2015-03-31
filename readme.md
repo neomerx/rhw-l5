@@ -514,3 +514,85 @@ As this algorithm has to start from the last chain (middleware/route) current im
 
 Run optimization command and see that CPU Time for ```Illuminate\Pipeline\Pipeline::then @2``` **reduced from 1.84 ms to 1.29 ms**.
 
+### Illuminate\Foundation\Application::getProvider
+
+That's how it looks in profiler
+
+![Foundation\Application::getProvider](/images/Foundation_Application_getProvider.png)
+
+That's the implementation
+
+```php
+	public function getProvider($provider)
+	{
+		$name = is_string($provider) ? $provider : get_class($provider);
+
+		return array_first($this->serviceProviders, function($key, $value) use ($name)
+		{
+			return $value instanceof $name;
+		});
+	}
+
+	protected function markAsRegistered($provider)
+	{
+		$this['events']->fire($class = get_class($provider), array($provider));
+
+		$this->serviceProviders[] = $provider;
+
+		$this->loadedProviders[$class] = true;
+	}
+```
+
+We can tweak how this search algorithm work with changes in how providers are stored in ```$this->serviceProviders```
+
+```php
+	public function getProvider($provider)
+	{
+		$name = is_string($provider) ? $provider : get_class($provider);
+		return isset($this->serviceProviders[$name]) ? $this->serviceProviders[$name] : null;
+	}
+
+	protected function markAsRegistered($provider)
+	{
+		$this['events']->fire($class = get_class($provider), array($provider));
+
+		$this->serviceProviders[$class] = $provider;
+
+		$this->loadedProviders[$class] = true;
+	}
+```
+
+Run optimization command and see profiling result. It shows total time of ```getProvider``` reduced to almost zero and again it couldn't be found it in the profiling report which means we have **improved for 1.27 ms**, **3.42%** from previous test. Overall timing decreased for 1,5 ms which supports our assumption.
+
+Final performance profile [is here](https://blackfire.io/profiles/2a9cf8c8-f468-45e9-9aea-bf036f241adc/graph) and comparison between '#3. Real Hello World' and '#4. Optimize Laravel 5 framework' could be found [here](https://blackfire.io/profiles/compare/01a8677b-d896-49cf-97a4-af148a26a7ad/graph).
+
+### Summary
+
+Made optimizations helped improve performance of the application for 14.3% (Wall Time).
+
+|Slot                            |Wall Time|IO     |CPU Time|Memory  |Network|
+|--------------------------------|---------|-------|--------|--------|-------|
+|#1. Initial                     |87.6 ms  |260 µs |87.3 ms |3.19  MB|0 B    |
+|#2. More built-in optimizations |60.9 ms  |121 µs |60.8 ms |3.04  MB|0 B    |
+|#3. Real Hello World            |41.6 ms  |56  µs |41.5 ms |2.80  MB|0 B    |
+|#4. Optimize Laravel 5 framework|35.6 ms  |0   µs |36.5 ms |2.79  MB|0 B    |
+|Comparison from #3 to #4        |-5.94 ms |-56 µs |-5.04 ms|-4.03 KB|0 B    |
+
+
+ab test shows the following results
+
+|ab test                           |Run 1 (RPS)|Run 2 (RPS)|Run 3 (RPS)|
+|----------------------------------|-----------|-----------|-----------|
+|PHP before framework optimization |  330.92   |  289.66   |  305.99   |
+|PHP after framework optimization  |  343.66   |  329.04   |  315.44   |
+|HHVM before framework optimization|  771.33   |  729.74   |  734.95   |
+|HHVM after framework optimization |  793.57   |  780.30   |  742.52   |
+
+As you see those results hasn't changed accordingly especially in HHVM case which leads us to conclusions
+
+* Kernel stack, TCP stack, PHP and NGINX should be optimized to unlock the application potential.
+* Requests per second alone cannot be reliable measure for checking application performance. Specialized tools should be used instead.
+
+## Conclusion
+
+Laravel 5 has some space for performance improvements and community can help a lot in this area with performance tools available.

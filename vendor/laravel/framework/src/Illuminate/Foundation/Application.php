@@ -492,11 +492,7 @@ class Application extends Container implements ApplicationContract, HttpKernelIn
 	public function getProvider($provider)
 	{
 		$name = is_string($provider) ? $provider : get_class($provider);
-
-		return array_first($this->serviceProviders, function($key, $value) use ($name)
-		{
-			return $value instanceof $name;
-		});
+		return isset($this->serviceProviders[$name]) ? $this->serviceProviders[$name] : null;
 	}
 
 	/**
@@ -520,7 +516,7 @@ class Application extends Container implements ApplicationContract, HttpKernelIn
 	{
 		$this['events']->fire($class = get_class($provider), array($provider));
 
-		$this->serviceProviders[] = $provider;
+		$this->serviceProviders[$class] = $provider;
 
 		$this->loadedProviders[$class] = true;
 	}
