@@ -562,9 +562,31 @@ We can tweak how this search algorithm work with changes in how providers are st
 	}
 ```
 
+**Update NOTE** The implementation above was used for testing. As ```getProvider``` should support searching by parent provider's parent classes and interfaces implementation should be
+```php
+	public function getProvider($provider)
+	{
+		$name = is_string($provider) ? $provider : get_class($provider);
+
+		if (isset($this->serviceProviders[$name])) {
+			return $this->serviceProviders[$name];
+		}
+
+		foreach ($this->serviceProviders as $serviceProvider) {
+			if ($serviceProvider instanceof $name) {
+				return $serviceProvider;
+			}
+		}
+
+		return null;
+	}
+```
+
 Run optimization command and see profiling result. It shows total time of ```getProvider``` reduced to almost zero and again it couldn't be found it in the profiling report which means we have **improved for 1.27 ms**, **3.42%** from previous test. Overall timing decreased for 1,5 ms which supports our assumption.
 
 Final performance profile [is here](https://blackfire.io/profiles/2a9cf8c8-f468-45e9-9aea-bf036f241adc/graph) and comparison between '#3. Real Hello World' and '#4. Optimize Laravel 5 framework' could be found [here](https://blackfire.io/profiles/compare/01a8677b-d896-49cf-97a4-af148a26a7ad/graph).
+
+All Laravel framework optimizations are in [this pull request](https://github.com/laravel/framework/pull/8239).
 
 ### Summary
 
