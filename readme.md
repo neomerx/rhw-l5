@@ -586,8 +586,6 @@ Run optimization command and see profiling result. It shows total time of ```get
 
 Final performance profile [is here](https://blackfire.io/profiles/2a9cf8c8-f468-45e9-9aea-bf036f241adc/graph) and comparison between '#3. Real Hello World' and '#4. Optimize Laravel 5 framework' could be found [here](https://blackfire.io/profiles/compare/01a8677b-d896-49cf-97a4-af148a26a7ad/graph).
 
-All Laravel framework optimizations are in [this pull request](https://github.com/laravel/framework/pull/8239).
-
 ### Summary
 
 Made optimizations helped improve performance of the application for 14.3% (Wall Time).
